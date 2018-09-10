@@ -8,18 +8,17 @@
 * Real world
   with
   Cats-Effect and Fs2
-* 自我介绍
-+ jilen
-+  水滴技术团队(scala.cool)
-** 系统架构
-+ 后端基于Scala
-+ 全异步
-+ FP
-* Why
+* 水滴技术概况
+  + 后端几乎完全基于Scala
+  + Play Framework / Macwire / Quill
+  + postgres / mysql / Kafka / ES
+  + FP - cats / cats-effect / shapeless
+  + 全异步
+* Why?
 ** 大佬怎么说
    #+NAME:   fig:SED-HR4049
    [[./img/john.png]]
-** FP 可以...
+** FP 带来什么？...
 *** Alex Nedelcu
     My first resume, circa 2004, please try not to laugh too hard. Apparently I had "good OOP programming skills", "proven leadership skills" and knew DHTML and Corel Draw, OMFG
 *** [[./img/alex0.jpg]]
@@ -35,8 +34,23 @@
    - 性能差
    - 难以推理
 
+** Parallelism with Future
+   #+BEGIN_SRC scala
+val f1 = Future {
+  Thread.sleep(1000)
+  1
+}
+val f2 = Future {
+  Thread.sleep(1000)
+  2
+}
+for {
+  r1 <- f1
+  r2 <- f2
+} yield (r1, r2)
+   #+END_SRC
 
-** Parallelism
+** Parallelism with IO
    #+BEGIN_SRC scala
 def ioParallel = {
     //Through cats.Parallel
@@ -77,6 +91,19 @@ def ioCancelable = {
    + doobie
    + quill(mysql/postgres async)
 
+*** 为什么用Quill
+    + Slick紧耦合JDBC, Quill可以支持多个后端
+    + Quill编译时候生成SQL（可以在IDE/Console看到）
+    + Quill可以很容易
+
+*** Quill internal
+    [[./img/quill.png]]
+
+*** Mysql-Async的问题
+    + 作者不再维护
+    + ConnectionPool实现非常error-prone
+    + 不会关闭PreparedStatement(mysql)
+
 *** Fix Mysql-Async Pooling
 
     #+BEGIN_SRC scala
@@ -95,7 +122,7 @@ class Queue[F[_], A](ref: Ref[F, State[F, A]])
     #+END_SRC
 
 *** enqueue
-     #+BEGIN_SRC scala
+    #+BEGIN_SRC scala
 def enqueue(a: A): F[Unit] = {
     ref.modify { s =>
       if (s.deq.isEmpty) {
@@ -110,9 +137,9 @@ def enqueue(a: A): F[Unit] = {
         F.unit
     }
 }
-     #+END_SRC
+    #+END_SRC
 *** dequeue
-#+BEGIN_SRC scala
+    #+BEGIN_SRC scala
   private def cancellableDequeue1(): F[(Either[Deferred[F, A], A], F[Unit])] = {
     Deferred[F, A].flatMap { defer =>
       ref.modify { s =>
@@ -130,10 +157,10 @@ def enqueue(a: A): F[Unit] = {
       }
     }
 }
-#+END_SRC
+    #+END_SRC
 
 ** dequeue
-#+BEGIN_SRC scala
+   #+BEGIN_SRC scala
 def timedDequeue(duration: FiniteDuration): F[Option[A]] = {
     cancellableDequeue1().flatMap {
       case (Right(v), _) => F.pure(Some(v))
@@ -145,11 +172,11 @@ def timedDequeue(duration: FiniteDuration): F[Option[A]] = {
         }
     }
 }
-#+END_SRC
+   #+END_SRC
 
 ** Http Client
 
-#+BEGIN_SRC scala
+   #+BEGIN_SRC scala
 implicit class AhcSyntax[F[_]](req: BoundedRequestBuilder)(implicit F: Async[F]) {
   def run() = F.async[Response] { k =>
     req.execute(new AsyncHandler {
@@ -160,29 +187,58 @@ implicit class AhcSyntax[F[_]](req: BoundedRequestBuilder)(implicit F: Async[F])
     })
   }
 }
-#+END_SRC
+   #+END_SRC
 
 ** Blocking Code
 
-#+BEGIN_SRC scala
+   #+BEGIN_SRC scala
 def shift[F[_], A](f: => A)(implicit F: Sync[F], S: ContextShift[F]) = {
   S.shift *> F.delay(f)
 }
-#+END_SRC
+   #+END_SRC
 
 ** 代码组织
 
 ** 定义Alg
-#+BEGIN_SRC scala
+   #+BEGIN_SRC scala
 trait UserAlg[F[_]] {
   def add(a: User): F[Long]
   def get(id: Long): F[Option[User]]
 }
-#+END_SRC
+   #+END_SRC
+
+** Algbera
+*** ADT with Free
+    #+BEGIN_SRC scala
+  sealed trait UserOpA[A]
+  case class Add(u: User) extends UserOpA[Long]
+  case class Get(id: Long) extends UserOpA[Option[User]]
+  type UserOp[A] = Free[UserOpA, A]
+
+  def add(u: User): UserOp[Long] = Free.liftF[UserOpA, Long](new Add(u))
+  def get(id: Long): UserOp[Option[User]] = Free.liftF[UserOpA, Option[User]](new Get(id))
+
+  def init(u: User) = {
+    get(u.id).flatMap {
+      case Some(u) => Free.pure(u)
+      case None => add(u).map(id => u.copy(id = id))
+    }
+  }
+    #+END_SRC
+
+*** Algbera with F
+    #+BEGIN_SRC scala
+class AlgWithFApp[F[_]](alg: UserAlg[F])(implicit F: Monad[F]) {
+  def init(user: User) = alg.get(user.id).flatMap {
+    case None => alg.add(user).map(id => user.copy(id = id))
+    case Some(h) => F.pure(h)
+  }
+}
+    #+END_SRC
 
 ** 用类型处理错误
 
-#+BEGIN_SRC scala
+   #+BEGIN_SRC scala
 sealed trait UserLoginErr extends Exception
 object UserLoginErr {
   case class NotExists(email: String) extends UserErr
@@ -191,18 +247,18 @@ object UserLoginErr {
 trait UserAlg[F[_]] {
   def login(email: String, pass: String): F[Either[UserLoginErr, Unit]]
 }
-#+END_SRC
+   #+END_SRC
 
 * Fs2
 
-Streaming your data with *Stream*
+  Streaming your data with *Stream*
 
 ** Fs2中Stream是什么
    + 标准库的 *Stream* - 可能是无限长的队列
    + fs2.Stream - 和标准库类似，但是这些元素可以通过 *eval* 副作用 *F* 获得
 
 ** Streaming query
-#+BEGIN_SRC scala
+   #+BEGIN_SRC scala
 case class User(id: Long)
 
 def readFrom(minId: Long): F[Seq[User]] = ???
@@ -217,15 +273,15 @@ def stream() = {
   }
 }
 stream().evalMap(sendMsg)
-#+END_SRC
+   #+END_SRC
 
 ** Prallel process
-#+BEGIN_SRC scala
+   #+BEGIN_SRC scala
  stream().mapAsync(100)(sendMsg)
-#+END_SRC
+   #+END_SRC
 
 ** Streaming mysql binlog
-#+BEGIN_SRC scala
+   #+BEGIN_SRC scala
 def stream[F[_]](cli: BinaryLogClient)(implicit F: ConcurrentEffect[F]) = {
 
     def register(queue: Queue[F, Event]) = F.delay {
@@ -244,35 +300,35 @@ def stream[F[_]](cli: BinaryLogClient)(implicit F: ConcurrentEffect[F]) = {
     }.flatMap(q => q.dequeueAvailable)
 
 }
-#+END_SRC
+   #+END_SRC
 
 ** Backpuress with Queue
- + bounded
- + unbounded
- + circularBuffer
+   + bounded
+   + unbounded
+   + circularBuffer
 
 ** Merge
-#+BEGIN_SRC scala
+   #+BEGIN_SRC scala
 def merge[F[_]: ConcurrentEffect, A] {
     def fromQuery: Stream[F, A] = ???
     def fromRealtime: Stream[F, A] = ???
     def stream = fromQuery.merge(fromRealtime)
 }
-#+END_SRC
+   #+END_SRC
 
 ** ParJoin
 
-#+BEGIN_SRC scala
+   #+BEGIN_SRC scala
 def parJoin[F[_]: ConcurrentEffect, A] = {
     def users: Stream[F, User] = ???
     def orders(uid: Long): Stream[F, Order] = ???
     users.map(u => orders(u.id)).parJoin(100)
 }
-#+END_SRC
+   #+END_SRC
 
 ** More
 
-+ Signal
-+ Topic
+   + Signal
+   + Topic
 
 * Thanks

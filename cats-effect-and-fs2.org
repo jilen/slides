@@ -1,6 +1,6 @@
 #+OPTIONS: num:nil toc:nil \n:t reveal_single_file:nil
-#+REVEAL_THEME: solarized
-#+REVEAL_TRANS: beige
+#+REVEAL_THEME: beige
+#+REVEAL_TRANS: Slide
 #+Title: Real world FP with Cats-Effect and Fs2
 #+Author: Jilen
 #+Email: jilen.zhang@gmail.com

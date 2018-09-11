@@ -1,5 +1,5 @@
 #+OPTIONS: num:nil toc:nil \n:t reveal_single_file:nil
-#+REVEAL_THEME: beige
+#+REVEAL_THEME: solarized
 #+REVEAL_TRANS: Slide
 #+Title: Real world FP with Cats-Effect and Fs2
 #+Author: Jilen
@@ -33,6 +33,7 @@
    - 不安全
    - 性能差
    - 难以推理
+
 
 ** Parallelism with Future
    #+BEGIN_SRC scala
@@ -80,11 +81,24 @@ def ioCancelable = {
    #+END_SRC
 
 ** Concurrency primitives
-   + Ref
-   + Deferred
-   + MVar
+   + Ref - AtomicRefrence
+   + Deferred - Promise
+   + MVar ~ BlocingQueue(1)
    + Semaphore
-** Resource safety
+
+** Typeclass
+#+BEGIN_SRC dot :file img/hierarchy.svg :cmdline -Kdot -Tsvg
+digraph typeclass {
+  graph [bgcolor="transparent"]
+  node [shape=box];
+  Bracket -> MonadError
+  Sync -> Bracket
+  Async -> Sync
+  Effect -> Async
+  Concurrent -> Async
+  ConcurrentEffect -> Effect
+}
+#+END_SRC
 
 * Cats-Effect实践
 
@@ -98,7 +112,17 @@ def ioCancelable = {
     + Quill可以很容易
 
 *** Quill internal
-    [[./img/quill.png]]
+#+BEGIN_SRC dot :file img/quill-flow.svg :cmdline -Kdot -Tsvg
+digraph quill {
+  graph [bgcolor="transparent"];
+  node [fontname = "monospace", shape="box"];
+  scala [label="Scala AST", xlabel="query[Foo].map(_.id)"];
+  quill[label="Macro expansion", xlabel="xxxContext.run(quotedAst)"];
+  output[label="SQL", xlabel="xxxContext.executeQuery(sql)"];
+  scala -> quill
+  quill -> output
+}
+#+END_SRC
 
 *** Mysql-Async的问题
     + 作者不再维护
@@ -210,7 +234,6 @@ trait UserAlg[F[_]] {
 }
    #+END_SRC
 
-*** Algbera
 *** ADT with Free
     #+BEGIN_SRC scala
   sealed trait UserOpA[A]
@@ -259,6 +282,22 @@ trait UserAlg[F[_]] {
 ** Fs2中Stream是什么
    + 标准库的 *Stream* - 可能是无限长的队列
    + fs2.Stream - 和标准库类似，但是这些元素可以通过 *eval* 副作用 *F* 获得
+
+** Elegant
+#+BEGIN_SRC dot :file img/stream.svg :cmdline -Kdot -Tsvg
+digraph stream {
+  graph [bgcolor="transparent"];
+  node [shape=box];
+  pipe[label="Pipe[F, A, B] = Stream[F, A] => Stream[F, B]"];
+  sink[label="Sink[F, A] = Pipe[F, A, Unit]"];
+  pipe
+  sink
+}
+#+END_SRC
+
+** Powerful
++ Combinators（scan/fold/split...）
++ Stateful transofrm with Pull
 
 ** Streaming query
    #+BEGIN_SRC scala

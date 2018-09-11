@@ -84,6 +84,7 @@ def ioCancelable = {
    + Deferred
    + MVar
    + Semaphore
+** Resource safety
 
 * Cats-Effect实践
 
@@ -177,14 +178,17 @@ def timedDequeue(duration: FiniteDuration): F[Option[A]] = {
 ** Http Client
 
    #+BEGIN_SRC scala
-implicit class AhcSyntax[F[_]](req: BoundedRequestBuilder)(implicit F: Async[F]) {
-  def run() = F.async[Response] { k =>
-    req.execute(new AsyncHandler {
+implicit class AhcSyntax[F[_]](req: BoundedRequestBuilder)(implicit F: Concurrent[F]) {
+  def run() = F.cancelable[Response] { k =>
+    val future = req.execute(new AsyncCompletionHandler[Unit] {
       override onThrowable(Throwable t) = {
         k(Left(t))
       }
-      override
+      override onCompleted(res: Response) = {
+        k(Right(res))
+      }
     })
+    F.delay(future.cancel())
   }
 }
    #+END_SRC
@@ -192,14 +196,13 @@ implicit class AhcSyntax[F[_]](req: BoundedRequestBuilder)(implicit F: Async[F])
 ** Blocking Code
 
    #+BEGIN_SRC scala
-def shift[F[_], A](f: => A)(implicit F: Sync[F], S: ContextShift[F]) = {
-  S.shift *> F.delay(f)
+def shift[F[_], A](f: => A)(ec: ExecutionContext)(implicit F: Sync[F]) = {
+  S.evalOn(ec)(F.delay(f))
 }
    #+END_SRC
 
 ** 代码组织
-
-** 定义Alg
+*** 定义Alg
    #+BEGIN_SRC scala
 trait UserAlg[F[_]] {
   def add(a: User): F[Long]
@@ -207,7 +210,7 @@ trait UserAlg[F[_]] {
 }
    #+END_SRC
 
-** Algbera
+*** Algbera
 *** ADT with Free
     #+BEGIN_SRC scala
   sealed trait UserOpA[A]
@@ -236,7 +239,7 @@ class AlgWithFApp[F[_]](alg: UserAlg[F])(implicit F: Monad[F]) {
 }
     #+END_SRC
 
-** 用类型处理错误
+*** 用类型处理错误
 
    #+BEGIN_SRC scala
 sealed trait UserLoginErr extends Exception
@@ -301,7 +304,8 @@ def stream[F[_]](cli: BinaryLogClient)(implicit F: ConcurrentEffect[F]) = {
 
 }
    #+END_SRC
-
+** Streaming postgres listen
+** Streaming kafka consumer
 ** Backpuress with Queue
    + bounded
    + unbounded
@@ -325,7 +329,7 @@ def parJoin[F[_]: ConcurrentEffect, A] = {
     users.map(u => orders(u.id)).parJoin(100)
 }
    #+END_SRC
-
+** Transform with Pull
 ** More
 
    + Signal

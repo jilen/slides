@@ -8,9 +8,11 @@
 * Real world
   with
   Cats-Effect and Fs2
-* 水滴技术概况
+** 作者
+   Jilen @ 水滴技术团队
+** 水滴技术概况
   + 后端几乎完全基于Scala
-  + Play Framework / Quill
+  + Play Framework / Quill / Akka
   + postgres / mysql / Kafka / ES
   + 全异步
   + FP - cats / cats-effect / shapeless

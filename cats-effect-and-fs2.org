@@ -25,11 +25,23 @@
 *** [[./img/alex.png]]
 
 * Cats-Effect
+** Typeclass
+   #+BEGIN_SRC dot :file img/hierarchy.svg :cmdline -Kdot -Tsvg
+digraph typeclass {
+  graph [bgcolor="transparent"]
+  node [shape=box, fontname="monospace"];
+  Bracket -> MonadError
+  Sync -> Bracket
+  Async -> Sync
+  Effect -> Async
+  Concurrent -> Async
+  ConcurrentEffect -> Effect
+}
+   #+END_SRC
 
 ** Why not Future
    #+CAPTION: IO vs Future
    #+NAME:   tab:features
-
    - 不安全
    - 性能差
    - 难以推理
@@ -86,19 +98,7 @@ def ioCancelable = {
    + MVar ~ BlocingQueue(1)
    + Semaphore
 
-** Typeclass
-   #+BEGIN_SRC dot :file img/hierarchy.svg :cmdline -Kdot -Tsvg
-digraph typeclass {
-  graph [bgcolor="transparent"]
-  node [shape=box];
-  Bracket -> MonadError
-  Sync -> Bracket
-  Async -> Sync
-  Effect -> Async
-  Concurrent -> Async
-  ConcurrentEffect -> Effect
-}
-   #+END_SRC
+
 
 * Cats-Effect实践
 
@@ -292,7 +292,7 @@ trait UserAlg[F[_]] {
    #+BEGIN_SRC dot :file img/stream.svg :cmdline -Kdot -Tsvg
 digraph stream {
   graph [bgcolor="transparent"];
-  node [shape=box];
+  node [shape=box, fontname="monospace"];
   pipe[label="Pipe[F, A, B] = Stream[F, A] => Stream[F, B]"];
   sink[label="Sink[F, A] = Pipe[F, A, Unit]"];
   pipe

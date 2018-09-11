@@ -10,10 +10,10 @@
   Cats-Effect and Fs2
 * 水滴技术概况
   + 后端几乎完全基于Scala
-  + Play Framework / Macwire / Quill
+  + Play Framework / Quill
   + postgres / mysql / Kafka / ES
-  + FP - cats / cats-effect / shapeless
   + 全异步
+  + FP - cats / cats-effect / shapeless
 * Why?
 ** 大佬怎么说
    #+NAME:   fig:SED-HR4049
@@ -87,7 +87,7 @@ def ioCancelable = {
    + Semaphore
 
 ** Typeclass
-#+BEGIN_SRC dot :file img/hierarchy.svg :cmdline -Kdot -Tsvg
+   #+BEGIN_SRC dot :file img/hierarchy.svg :cmdline -Kdot -Tsvg
 digraph typeclass {
   graph [bgcolor="transparent"]
   node [shape=box];
@@ -98,7 +98,7 @@ digraph typeclass {
   Concurrent -> Async
   ConcurrentEffect -> Effect
 }
-#+END_SRC
+   #+END_SRC
 
 * Cats-Effect实践
 
@@ -106,13 +106,13 @@ digraph typeclass {
    + doobie
    + quill(mysql/postgres async)
 
-*** 为什么用Quill
+*** Pros
     + Slick紧耦合JDBC, Quill可以支持多个后端
     + Quill编译时候生成SQL（可以在IDE/Console看到）
     + Quill可以很容易
 
 *** Quill internal
-#+BEGIN_SRC dot :file img/quill-flow.svg :cmdline -Kdot -Tsvg
+    #+BEGIN_SRC dot :file img/quill-flow.svg :cmdline -Kdot -Tsvg
 digraph quill {
   graph [bgcolor="transparent"];
   node [fontname = "monospace", shape="box"];
@@ -122,7 +122,12 @@ digraph quill {
   scala -> quill
   quill -> output
 }
-#+END_SRC
+    #+END_SRC
+
+*** Cons
+    + 不支持复杂的join（无法正确进行Beta-Reduction，短时间内很难修复）
+    + 会生成带空格的ident（会导致老版本sbt增量编译无法工作）
+    + 可能会出现maximum string literal length exceeded
 
 *** Mysql-Async的问题
     + 作者不再维护
@@ -227,12 +232,12 @@ def shift[F[_], A](f: => A)(ec: ExecutionContext)(implicit F: Sync[F]) = {
 
 ** 代码组织
 *** 定义Alg
-   #+BEGIN_SRC scala
+    #+BEGIN_SRC scala
 trait UserAlg[F[_]] {
   def add(a: User): F[Long]
   def get(id: Long): F[Option[User]]
 }
-   #+END_SRC
+    #+END_SRC
 
 *** ADT with Free
     #+BEGIN_SRC scala
@@ -264,7 +269,7 @@ class AlgWithFApp[F[_]](alg: UserAlg[F])(implicit F: Monad[F]) {
 
 *** 用类型处理错误
 
-   #+BEGIN_SRC scala
+    #+BEGIN_SRC scala
 sealed trait UserLoginErr extends Exception
 object UserLoginErr {
   case class NotExists(email: String) extends UserErr
@@ -273,7 +278,7 @@ object UserLoginErr {
 trait UserAlg[F[_]] {
   def login(email: String, pass: String): F[Either[UserLoginErr, Unit]]
 }
-   #+END_SRC
+    #+END_SRC
 
 * Fs2
 
@@ -284,7 +289,7 @@ trait UserAlg[F[_]] {
    + fs2.Stream - 和标准库类似，但是这些元素可以通过 *eval* 副作用 *F* 获得
 
 ** Elegant
-#+BEGIN_SRC dot :file img/stream.svg :cmdline -Kdot -Tsvg
+   #+BEGIN_SRC dot :file img/stream.svg :cmdline -Kdot -Tsvg
 digraph stream {
   graph [bgcolor="transparent"];
   node [shape=box];
@@ -293,11 +298,11 @@ digraph stream {
   pipe
   sink
 }
-#+END_SRC
+   #+END_SRC
 
 ** Powerful
-+ Combinators（scan/fold/split...）
-+ Stateful transofrm with Pull
+   + Combinators（scan/fold/split...）
+   + Stateful transofrm with Pull
 
 ** Streaming query
    #+BEGIN_SRC scala

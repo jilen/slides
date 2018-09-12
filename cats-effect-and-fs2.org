@@ -12,20 +12,24 @@
    @ 水滴技术团队
 ** 公司介绍
    + 微信公众号相关服务
-   + 处理较大量的微信消息推送
+   + 实时处理较大量的微信消息推送
    + 保存较大量的用户数据
    #+BEGIN_NOTES
    在并发/存储/编程范式上做了一些微小工作
    #+END_NOTES
 ** 水滴技术概况
    + 后端几乎完全基于Scala
-   + Play Framework / Quill / Akka
+   + 使用主流的Play Framework / Quill / Akka
    + postgres / mysql / Kafka / ES
    + 全异步
    + FP - cats / cats-effect / shapeless
    #+BEGIN_NOTES
    非主流技术选型
    #+END_NOTES
+** 分享内容
+   + Cats-Effect介绍
+   + Cats-Effect工程实践
+   + F2实践
 * Why?
 ** 提升知识水平...
 *** [[./img/alex.png]]
@@ -40,18 +44,27 @@
    [[./img/john.png]]
 
 * Cats-Effect
+** cats的IO Monad实现
+   + 隔离推迟副作用
+   + 异步抽象
 ** Typeclass
-   #+BEGIN_SRC dot :file img/hierarchy.svg :cmdline -Kdot -Tsvg
-digraph typeclass {
-  graph [bgcolor="transparent"]
-  node [shape=box, fontname="monospace"];
-  Bracket -> MonadError
-  Sync -> Bracket
-  Async -> Sync
-  Effect -> Async
-  Concurrent -> Async
-  ConcurrentEffect -> Effect
-}
+   #+BEGIN_SRC plantuml :file img/hierarchy.svg
+interface MonadError
+interface Bracket
+interface Sync
+interface Async
+interface Effect
+interface Concurrent
+interface ConcurrentEffect
+
+MonadError <|-- Bracket
+Bracket <|-- Sync
+Sync <|-- Async
+Async <|-- Effect
+Async <|-- Concurrent
+Concurrent <|-- ConcurrentEffect
+Effect <|-- ConcurrentEffect
+hide members
    #+END_SRC
 
 ** Why not Future
@@ -99,37 +112,35 @@ def ioCancelable = {
     }
 
     for {
-      m <- setInterval(i, IO(println("Hi"))).start
+      h <- setInterval(i, IO(println("Hi"))).start
       _ <- IO.sleep(1.seconds)
-      _ <- m.cancel
+      _ <- h
     } yield {}
 }
    #+END_SRC
 
-** Concurrency primitives
+** Concurrency
+   Purely functional, lock-free, non-blocking
    + Ref - AtomicRefrence
    + Deferred - Promise
-   + MVar ~ BlocingQueue(1)
+   + MVar - BlocingQueue(1)
    + Semaphore
-** Pros
-   + Asynchronicity
-   + Composability
-   + Concurrency
-   + Interruptibility
-   + Resource Safety
 * Cats-Effect实践
 
 ** 数据库操作
    + doobie
    + quill(mysql/postgres async)
 
+
+
 *** Pros
+
     + Slick紧耦合JDBC, Quill可以支持多个后端
     + Quill编译时候生成SQL（可以在IDE/Console看到）
-    + Quill可以很容易
+    + 通过infix可以支持特定函数
 
 *** Quill internal
-    #+BEGIN_SRC dot :file img/quill-flow.svg :cmdline -Kdot -Tsvg
+    #+BEGIN_SRC dot :file img/quill-flow.svg
 digraph quill {
   graph [bgcolor="transparent"];
   node [fontname = "monospace", shape="box"];
@@ -141,15 +152,31 @@ digraph quill {
 }
     #+END_SRC
 
+    #+RESULTS:
+    [[file:img/quill-flow.svg]]
+
 *** Cons
     + 不支持复杂的join（无法正确进行Beta-Reduction，短时间内很难修复）
     + 会生成带空格的ident（会导致老版本sbt增量编译无法工作）
     + 可能会出现maximum string literal length exceeded
 
 *** Mysql-Async的问题
-    + 作者不再维护
-    + ConnectionPool实现非常error-prone
-    + 不会关闭PreparedStatement(mysql)
++ 设计上比较复杂
++ 作者不再维护
++ ConnectionPool实现非常error-prone
++ 不会关闭PreparedStatement(mysql)
+
+*** Pooling with Mysql-Async
+#+BEGIN_SRC plantuml :file img/mysql-async-pool.png
+interface AsyncObjectPool
+class Worker
+class SingleThreadedAsyncObjectPool
+class PartitionedAsyncObjectPool
+AsyncObjectPool <|--  SingleThreadedAsyncObjectPool
+AsyncObjectPool <|--  PartitionedAsyncObjectPool
+PartitionedAsyncObjectPool *-- SingleThreadedAsyncObjectPool
+SingleThreadedAsyncObjectPool *-- Worker
+#+END_SRC
 
 *** Fix Mysql-Async Pooling
 
@@ -170,6 +197,8 @@ class Queue[F[_], A](ref: Ref[F, State[F, A]])
 
 *** enqueue
     #+BEGIN_SRC scala
+// final case class State[F[_], A](queue: Vector[A], deq:   Vector[Deferred[F, A]])
+// ref: Ref[F, State[F, A]]
 def enqueue(a: A): F[Unit] = {
     ref.modify { s =>
       if (s.deq.isEmpty) {
@@ -185,41 +214,6 @@ def enqueue(a: A): F[Unit] = {
     }
 }
     #+END_SRC
-*** dequeue
-    #+BEGIN_SRC scala
-  private def cancellableDequeue1(): F[(Either[Deferred[F, A], A], F[Unit])] = {
-    Deferred[F, A].flatMap { defer =>
-      ref.modify { s =>
-        if (s.queue.isEmpty)
-          (s.copy(deq = s.deq :+ defer), None)
-        else
-          (s.copy(queue = s.queue.drop(1)), Some(s.queue.take(1).head))
-      }.map {
-        case Some(h) =>
-          (Right(h), F.unit)
-        case None =>
-          (Left(defer), ref.modify { s =>
-            (s.copy(deq = s.deq.filterNot(_ == defer)), {})
-          })
-      }
-    }
-}
-    #+END_SRC
-
-** dequeue
-   #+BEGIN_SRC scala
-def timedDequeue(duration: FiniteDuration): F[Option[A]] = {
-    cancellableDequeue1().flatMap {
-      case (Right(v), _) => F.pure(Some(v))
-      case (Left(defer), cancel) =>
-        val timeout = T.sleep(duration)
-        F.race(timeout, defer.get).flatMap {
-          case Right(v) => F.pure(Some(v))
-          case Left(_)  => cancel.as(None)
-        }
-    }
-}
-   #+END_SRC
 
 ** Http Client
 
@@ -242,7 +236,7 @@ implicit class AhcSyntax[F[_]](req: BoundedRequestBuilder)(implicit F: Concurren
 ** Blocking Code
 
    #+BEGIN_SRC scala
-def shift[F[_], A](f: => A)(ec: ExecutionContext)(implicit F: Sync[F]) = {
+def shift[F[_], A](f: => A)(ec: ExecutionContext)(implicit S: ContextShift[F]) = {
   S.evalOn(ec)(F.delay(f))
 }
    #+END_SRC
@@ -289,8 +283,8 @@ class AlgWithFApp[F[_]](alg: UserAlg[F])(implicit F: Monad[F]) {
     #+BEGIN_SRC scala
 sealed trait UserLoginErr extends Exception
 object UserLoginErr {
-  case class NotExists(email: String) extends UserErr
-  case object PasswordIncorrect extends UserErr
+  case class NotExists(email: String) extends UserLoginErr
+  case object PasswordIncorrect extends UserLoginErr
 }
 trait UserAlg[F[_]] {
   def login(email: String, pass: String): F[Either[UserLoginErr, Unit]]
@@ -310,7 +304,6 @@ trait UserAlg[F[_]] {
 ** 什么是简单
    + 优雅(概念少)
    + 复杂(概念多)
-   + 容易
 ** Elegant
    #+BEGIN_SRC scala
 type Pipe[F[_], I, O] = Stream[F, I] => Stream[F, O]
@@ -334,7 +327,7 @@ trait Queue[F[_], A] {
 case class User(id: Long)
 
 def readFrom(minId: Long): F[Seq[User]] = ???
-def sendMsg(u: User): F[Unit]
+def sendMsg(u: User): F[Unit] = ???
 
 def stream() = {
   def loop(from: Long): Stream[F, User] =
@@ -343,6 +336,7 @@ def stream() = {
       case us => Stream.empty
     }
   }
+  loop(0L)
 }
 stream().evalMap(sendMsg)
    #+END_SRC
@@ -373,9 +367,6 @@ def stream[F[_]](cli: BinaryLogClient)(implicit F: ConcurrentEffect[F]) = {
 
 }
    #+END_SRC
-** Streaming postgres listen
-
-** Streaming kafka consumer
 ** Backpuress with Queue
    + bounded
    + unbounded

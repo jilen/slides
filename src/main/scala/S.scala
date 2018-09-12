@@ -30,4 +30,40 @@ class S[F[_]: Concurrent] {
     def orders(uid: Long): Stream[F, Order] = ???
     users.map(u => orders(u.id)).parJoin(100)
   }
+
+  case class Packet(bytes: Array[Byte])
+
+  def decodePacket[F[_]](src: Stream[F, Byte]) = {
+
+    @annotation.tailrec
+    def splitPackets(packets: Vector[Packet], c: Chunk[Byte]): (Vector[Packet], Chunk[Byte]) = {
+      if(c.size < 4) {
+        (packets, c)
+      } else {
+        val lenBytes = c.take(4).toBytes
+        val len = ((0xFF & lenBytes(0)) << 24) | ((0xFF & lenBytes(1)) << 16) |
+        ((0xFF & lenBytes(2)) << 8) | (0xFF & lenBytes(3));
+        if(c.size < 4 + len) {
+          (packets, c)
+        } else {
+          val packetBytes = c.drop(4).take(len).toBytes.toArray
+          splitPackets(
+            packets :+ Packet(packetBytes),
+            c.drop(4 + len)
+          )
+        }
+      }
+    }
+
+    def loop(prev: Chunk[Byte], s: Stream[F, Byte]): Pull[F, Packet, Unit] = {
+      s.pull.unconsChunk.flatMap {
+        case Some((hd, tl)) =>
+          val concated = Chunk.concat(Seq(prev, hd))
+          val (packets, remain) = splitPackets(Vector.empty, concated)
+          Pull.output(Chunk.vector(packets)) >> loop(remain, tl)
+        case None =>
+          Pull.done
+      }
+    }
+  }
 }

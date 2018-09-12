@@ -1,4 +1,4 @@
-#+OPTIONS: num:nil toc:nil \n:t reveal_single_file:nil
+#+OPTIONS: num:nil toc:nil \n:t reveal_single_file:t
 #+REVEAL_THEME: solarized
 #+REVEAL_TRANS: Slide
 #+Title: Real world FP with Cats-Effect and Fs2
@@ -8,23 +8,36 @@
 * Real world
   with
   Cats-Effect and Fs2
-** 作者
-   Jilen @ 水滴技术团队
+** Jilen
+   @ 水滴技术团队
+** 公司介绍
+   + 微信公众号相关服务
+   + 处理较大量的微信消息推送
+   + 保存较大量的用户数据
+   #+BEGIN_NOTES
+   在并发/存储/编程范式上做了一些微小工作
+   #+END_NOTES
 ** 水滴技术概况
-  + 后端几乎完全基于Scala
-  + Play Framework / Quill / Akka
-  + postgres / mysql / Kafka / ES
-  + 全异步
-  + FP - cats / cats-effect / shapeless
+   + 后端几乎完全基于Scala
+   + Play Framework / Quill / Akka
+   + postgres / mysql / Kafka / ES
+   + 全异步
+   + FP - cats / cats-effect / shapeless
+   #+BEGIN_NOTES
+   非主流技术选型
+   #+END_NOTES
 * Why?
+** 提升知识水平...
+*** [[./img/alex.png]]
+*** [[./img/alex0.jpg]]
+*** Alex Nedelcu
+    My first resume, circa 2004, please try not to laugh too hard. Apparently I had "good OOP programming skills", "proven leadership skills" and knew DHTML and Corel Draw, OMFG
+** John A. De Goes
+   + scalaz manitaner
+   + scalaz-zio 作者
 ** 大佬怎么说
    #+NAME:   fig:SED-HR4049
    [[./img/john.png]]
-** FP 带来什么？...
-*** Alex Nedelcu
-    My first resume, circa 2004, please try not to laugh too hard. Apparently I had "good OOP programming skills", "proven leadership skills" and knew DHTML and Corel Draw, OMFG
-*** [[./img/alex0.jpg]]
-*** [[./img/alex.png]]
 
 * Cats-Effect
 ** Typeclass
@@ -47,7 +60,6 @@ digraph typeclass {
    - 不安全
    - 性能差
    - 难以推理
-
 
 ** Parallelism with Future
    #+BEGIN_SRC scala
@@ -99,9 +111,12 @@ def ioCancelable = {
    + Deferred - Promise
    + MVar ~ BlocingQueue(1)
    + Semaphore
-
-
-
+** Pros
+   + Asynchronicity
+   + Composability
+   + Concurrency
+   + Interruptibility
+   + Resource Safety
 * Cats-Effect实践
 
 ** 数据库操作
@@ -286,19 +301,27 @@ trait UserAlg[F[_]] {
 
   Streaming your data with *Stream*
 
-** Fs2中Stream是什么
+** Stream是什么
    + 标准库的 *Stream* - 可能是无限长的队列
    + fs2.Stream - 和标准库类似，但是这些元素可以通过 *eval* 副作用 *F* 获得
-
+   #+BEGIN_NOTES
+   实践过程中经常需要处理副作用
+   #+END_NOTES
+** 什么是简单
+   + 优雅(概念少)
+   + 复杂(概念多)
+   + 容易
 ** Elegant
-   #+BEGIN_SRC dot :file img/stream.svg :cmdline -Kdot -Tsvg
-digraph stream {
-  graph [bgcolor="transparent"];
-  node [shape=box, fontname="monospace"];
-  pipe[label="Pipe[F, A, B] = Stream[F, A] => Stream[F, B]"];
-  sink[label="Sink[F, A] = Pipe[F, A, Unit]"];
-  pipe
-  sink
+   #+BEGIN_SRC scala
+type Pipe[F[_], I, O] = Stream[F, I] => Stream[F, O]
+type Sink[F[_], I] = Pipe[F, I, Unit]
+trait Topic {
+  def publish: Sink[F, A]
+  def subscribe: Stream[F, A]
+}
+trait Queue[F[_], A] {
+  def enqueue: Sink[F, A]
+  def dequeue: Stream[F, A]
 }
    #+END_SRC
 
@@ -351,6 +374,7 @@ def stream[F[_]](cli: BinaryLogClient)(implicit F: ConcurrentEffect[F]) = {
 }
    #+END_SRC
 ** Streaming postgres listen
+
 ** Streaming kafka consumer
 ** Backpuress with Queue
    + bounded
@@ -367,18 +391,16 @@ def merge[F[_]: ConcurrentEffect, A] {
    #+END_SRC
 
 ** ParJoin
-
    #+BEGIN_SRC scala
 def parJoin[F[_]: ConcurrentEffect, A] = {
-    def users: Stream[F, User] = ???
-    def orders(uid: Long): Stream[F, Order] = ???
-    users.map(u => orders(u.id)).parJoin(100)
+    def conns: Stream[F, Con]
+    def request(c: Con): Stream[F, Msg]
+    def reply(m: Msg): F[Unit]
+    def run() = conns.flatMap(request).parJoin(1000).evalMap(reply)
 }
    #+END_SRC
 ** Transform with Pull
 ** More
-
    + Signal
    + Topic
-
 * Thanks

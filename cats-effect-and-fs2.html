@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Real world FP with Cats-Effect and Fs2</title>
+<meta name="author" content="(Jilen)"/>
+<style type="text/css">
+.underline { text-decoration: underline; }
+</style>
+<link rel="stylesheet" href="./reveal.js/css/reveal.css"/>
+
+<link rel="stylesheet" href="./reveal.js/css/theme/solarized.css" id="theme"/>
+
+
+<!-- If the query includes 'print-pdf', include the PDF print sheet -->
+<script>
+    if( window.location.search.match( /print-pdf/gi ) ) {
+        var link = document.createElement( 'link' );
+        link.rel = 'stylesheet';
+        link.type = 'text/css';
+        link.href = './reveal.js/css/print/pdf.css';
+        document.getElementsByTagName( 'head' )[0].appendChild( link );
+    }
+</script>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<section>
+<section id="slide-org688c0b4">
+<h2 id="org688c0b4">Real world FP</h2>
+<p>
+with<br />
+Cats-Effect and Fs2<br />
+</p>
+</section>
+<section id="slide-org6cd671f">
+<h3 id="org6cd671f">Jilen</h3>
+<p>
+@ 水滴技术团队<br />
+</p>
+</section>
+<section id="slide-orgfc73883">
+<h3 id="orgfc73883">公司介绍</h3>
+<ul>
+<li>微信公众号相关服务<br /></li>
+<li>实时处理较大量的微信消息推送<br /></li>
+<li>保存较大量的用户数据<br /></li>
+
+</ul>
+<aside class="notes">
+<p>
+在并发/存储/编程范式上做了一些微小工作<br />
+</p>
+
+</aside>
+</section>
+<section id="slide-org7229a14">
+<h3 id="org7229a14">水滴技术概况</h3>
+<ul>
+<li>后端几乎完全基于Scala<br /></li>
+<li>使用主流的Play Framework / Quill / Akka<br /></li>
+<li>postgres / mysql / Kafka / ES<br /></li>
+<li>全异步<br /></li>
+<li>FP - cats / cats-effect / shapeless<br /></li>
+
+</ul>
+<aside class="notes">
+<p>
+非主流技术选型<br />
+</p>
+
+</aside>
+</section>
+<section id="slide-org6a4f5f6">
+<h3 id="org6a4f5f6">分享内容</h3>
+<ul>
+<li>Cats-Effect介绍<br /></li>
+<li>Cats-Effect工程实践<br /></li>
+<li>Fs2实践<br /></li>
+
+</ul>
+</section>
+</section>
+<section>
+<section id="slide-org1aefc5a">
+<h2 id="org1aefc5a">Why?</h2>
+<div class="outline-text-2" id="text-org1aefc5a">
+</div>
+</section>
+<section id="slide-org4f6ce10">
+<h3 id="org4f6ce10">提升知识水平&#x2026;</h3>
+<div class="outline-text-3" id="text-org4f6ce10">
+</div>
+</section>
+<section id="slide-org4d8236e">
+<h4 id="org4d8236e"><img src="./img/alex.png" alt="alex.png" /></h4>
+</section>
+<section id="slide-org50b76be">
+<h4 id="org50b76be"><img src="./img/alex0.jpg" alt="alex0.jpg" /></h4>
+</section>
+<section id="slide-orgde16049">
+<h4 id="orgde16049">Alex Nedelcu</h4>
+<p>
+My first resume, circa 2004, please try not to laugh too hard. Apparently I had "good OOP programming skills", "proven leadership skills" and knew DHTML and Corel Draw, OMFG<br />
+</p>
+</section>
+<section id="slide-org7b2bfc2">
+<h3 id="org7b2bfc2">John A. De Goes</h3>
+<ul>
+<li>scalaz manitaner<br /></li>
+<li>scalaz-zio 作者<br /></li>
+
+</ul>
+</section>
+<section id="slide-org601cee9">
+<h3 id="org601cee9">大佬怎么说</h3>
+
+<div id="org1b486ee" class="figure">
+<p><img src="./img/john.png" alt="john.png" /><br />
+</p>
+</div>
+
+</section>
+</section>
+<section>
+<section id="slide-org06ebf9e">
+<h2 id="org06ebf9e">Cats-Effect</h2>
+<div class="outline-text-2" id="text-org06ebf9e">
+</div>
+</section>
+<section id="slide-org0bbdeb4">
+<h3 id="org0bbdeb4">cats的IO Monad实现</h3>
+<ul>
+<li>隔离推迟副作用<br /></li>
+<li>异步抽象<br /></li>
+
+</ul>
+</section>
+<section id="slide-orge4ab2ca">
+<h3 id="orge4ab2ca">Typeclass</h3>
+
+<div class="figure">
+<p><object type="image/svg+xml" data="img/hierarchy.svg" class="org-svg">
+Sorry, your browser does not support SVG.</object><br />
+</p>
+</div>
+
+</section>
+<section id="slide-org4e7f38e">
+<h3 id="org4e7f38e">Why not Future</h3>
+<ul>
+<li>不安全<br /></li>
+<li>性能差<br /></li>
+<li>难以推理<br /></li>
+
+</ul>
+
+</section>
+<section id="slide-org93c650d">
+<h3 id="org93c650d">Parallelism with Future</h3>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #bf360c;">val</span> <span style="color: #455A64;">f1</span> <span style="color: #bf360c;">=</span> <span style="color: #0288D1;">Future</span> <span style="color: #707183;">{</span>
+  <span style="color: #0288D1;">Thread</span>.sleep<span style="color: #7388d6;">(</span><span style="color: #0288D1;">1000</span><span style="color: #7388d6;">)</span>
+  <span style="color: #0288D1;">1</span>
+<span style="color: #707183;">}</span>
+<span style="color: #bf360c;">val</span> <span style="color: #455A64;">f2</span> <span style="color: #bf360c;">=</span> <span style="color: #0288D1;">Future</span> <span style="color: #707183;">{</span>
+  <span style="color: #0288D1;">Thread</span>.sleep<span style="color: #7388d6;">(</span><span style="color: #0288D1;">1000</span><span style="color: #7388d6;">)</span>
+  <span style="color: #0288D1;">2</span>
+<span style="color: #707183;">}</span>
+<span style="color: #bf360c;">for</span> <span style="color: #707183;">{</span>
+  r1 <span style="color: #bf360c;">&lt;-</span> f1
+  r2 <span style="color: #bf360c;">&lt;-</span> f2
+<span style="color: #707183;">}</span> <span style="color: #bf360c;">yield</span> <span style="color: #707183;">(</span>r1, r2<span style="color: #707183;">)</span>
+</pre>
+</div>
+
+</section>
+<section id="slide-org6f9e799">
+<h3 id="org6f9e799">Parallelism with IO</h3>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #bf360c;">def</span> <span style="color: #388E3C;">ioParallel</span> <span style="color: #bf360c;">=</span> <span style="color: #707183;">{</span>
+    <span style="color: #795548;">//</span><span style="color: #795548;">Through cats.Parallel</span>
+    <span style="color: #bf360c;">val</span> <span style="color: #455A64;">f1</span> <span style="color: #bf360c;">=</span> <span style="color: #0288D1;">IO</span>.sleep<span style="color: #7388d6;">(</span><span style="color: #0288D1;">1.</span>seconds<span style="color: #7388d6;">)</span>.as<span style="color: #7388d6;">(</span><span style="color: #0288D1;">1</span><span style="color: #7388d6;">)</span>
+    <span style="color: #bf360c;">val</span> <span style="color: #455A64;">f2</span> <span style="color: #bf360c;">=</span> <span style="color: #0288D1;">IO</span>.sleep<span style="color: #7388d6;">(</span><span style="color: #0288D1;">1.</span>seconds<span style="color: #7388d6;">)</span>.as<span style="color: #7388d6;">(</span><span style="color: #0288D1;">1</span><span style="color: #7388d6;">)</span>
+    <span style="color: #7388d6;">(</span>f1, f2<span style="color: #7388d6;">)</span>.parTupled
+<span style="color: #707183;">}</span>
+</pre>
+</div>
+
+</section>
+<section id="slide-org71c1348">
+<h3 id="org71c1348">Cancelable (Fiber)</h3>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #bf360c;">def</span> <span style="color: #388E3C;">ioCancelable</span> <span style="color: #bf360c;">=</span> <span style="color: #707183;">{</span>
+
+    <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">setInterval</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">A</span><span style="color: #7388d6;">](</span>i<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">FiniteDuration</span>, f<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">IO</span><span style="color: #909183;">[</span><span style="color: #0288D1;">A</span><span style="color: #909183;">]</span><span style="color: #7388d6;">)</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">IO</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">Unit</span><span style="color: #7388d6;">]</span> <span style="color: #bf360c;">=</span> <span style="color: #7388d6;">{</span>
+      <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">loop</span><span style="color: #909183;">()</span> <span style="color: #bf360c;">=</span> <span style="color: #909183;">{</span>
+        <span style="color: #0288D1;">IO</span>.sleep<span style="color: #709870;">(</span>i<span style="color: #709870;">)</span> &gt;&gt; f.runAsync<span style="color: #709870;">(</span><span style="color: #bf360c;">_</span> <span style="color: #bf360c;">=&gt;</span> <span style="color: #0288D1;">IO</span>.unit<span style="color: #709870;">)</span> &gt;&gt; loop<span style="color: #709870;">()</span>
+      <span style="color: #909183;">}</span>
+      loop<span style="color: #909183;">()</span>.start.flatMap<span style="color: #909183;">(</span><span style="color: #bf360c;">_</span>.cancel<span style="color: #909183;">)</span>
+    <span style="color: #7388d6;">}</span>
+
+    <span style="color: #bf360c;">for</span> <span style="color: #7388d6;">{</span>
+      h <span style="color: #bf360c;">&lt;-</span> setInterval<span style="color: #909183;">(</span>i, <span style="color: #0288D1;">IO</span><span style="color: #709870;">(</span>println<span style="color: #907373;">(</span><span style="color: #6C3082;">"Hi"</span><span style="color: #907373;">)</span><span style="color: #709870;">)</span><span style="color: #909183;">)</span>.start
+      <span style="color: #bf360c;">_</span> <span style="color: #bf360c;">&lt;-</span> <span style="color: #0288D1;">IO</span>.sleep<span style="color: #909183;">(</span><span style="color: #0288D1;">1.</span>seconds<span style="color: #909183;">)</span>
+      <span style="color: #bf360c;">_</span> <span style="color: #bf360c;">&lt;-</span> h
+    <span style="color: #7388d6;">}</span> <span style="color: #bf360c;">yield</span> <span style="color: #7388d6;">{}</span>
+<span style="color: #707183;">}</span>
+</pre>
+</div>
+
+</section>
+<section id="slide-orgbc60033">
+<h3 id="orgbc60033">Concurrency</h3>
+<p>
+Purely functional, lock-free, non-blocking<br />
+</p>
+<ul>
+<li>Ref - AtomicRefrence<br /></li>
+<li>Deferred - Promise<br /></li>
+<li>MVar - BlocingQueue(1)<br /></li>
+<li>Semaphore<br /></li>
+
+</ul>
+</section>
+</section>
+<section>
+<section id="slide-orgccc84be">
+<h2 id="orgccc84be">Cats-Effect实践</h2>
+<div class="outline-text-2" id="text-orgccc84be">
+</div>
+</section>
+<section id="slide-org1f60e4b">
+<h3 id="org1f60e4b">数据库操作</h3>
+<ul>
+<li>doobie<br /></li>
+<li>quill(mysql/postgres async)<br /></li>
+
+</ul>
+
+
+
+</section>
+<section id="slide-org6139280">
+<h4 id="org6139280">Pros</h4>
+<ul>
+<li>Slick紧耦合JDBC, Quill可以支持多个后端<br /></li>
+<li>Quill编译时候生成SQL（可以在IDE/Console看到）<br /></li>
+<li>通过infix可以支持特定函数<br /></li>
+
+</ul>
+
+</section>
+<section id="slide-org1ac56e0">
+<h4 id="org1ac56e0">Quill internal</h4>
+
+<div class="figure">
+<p><object type="image/svg+xml" data="img/quill-flow.svg" class="org-svg">
+Sorry, your browser does not support SVG.</object><br />
+</p>
+</div>
+
+</section>
+<section id="slide-orgbd0697b">
+<h4 id="orgbd0697b">Cons</h4>
+<ul>
+<li>不支持复杂的join（无法正确进行Beta-Reduction，短时间内很难修复）<br /></li>
+<li>会生成带空格的ident（会导致老版本sbt增量编译无法工作）<br /></li>
+<li>可能会出现maximum string literal length exceeded<br /></li>
+
+</ul>
+
+</section>
+<section id="slide-org2c8bf48">
+<h4 id="org2c8bf48">Mysql-Async的问题</h4>
+<ul>
+<li>设计上比较复杂<br /></li>
+<li>作者不再维护<br /></li>
+<li>ConnectionPool实现非常error-prone<br /></li>
+<li>不会关闭PreparedStatement(mysql)<br /></li>
+
+</ul>
+
+</section>
+<section id="slide-org909abb8">
+<h4 id="org909abb8">Pooling with Mysql-Async</h4>
+
+<div class="figure">
+<p><img src="img/mysql-async-pool.png" alt="mysql-async-pool.png" /><br />
+</p>
+</div>
+
+</section>
+<section id="slide-org95e220e">
+<h4 id="org95e220e">Fix Mysql-Async Pooling</h4>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #795548;">final</span> <span style="color: #bf360c;">case</span> <span style="color: #bf360c;">class</span> <span style="color: #3f51b5;">State</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">[</span><span style="color: #bf360c;">_</span><span style="color: #7388d6;">]</span>, <span style="color: #0288D1;">A</span><span style="color: #707183;">](</span>
+  queue<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Vector</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">A</span><span style="color: #7388d6;">]</span>,
+  deq<span style="color: #bf360c;">:</span>   <span style="color: #3f51b5;">Vector</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">Deferred</span><span style="color: #909183;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">A</span><span style="color: #909183;">]</span><span style="color: #7388d6;">]</span>
+<span style="color: #707183;">)</span>
+<span style="color: #bf360c;">class</span> <span style="color: #3f51b5;">Queue</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">[</span><span style="color: #bf360c;">_</span><span style="color: #7388d6;">]</span>, <span style="color: #0288D1;">A</span><span style="color: #707183;">](</span>ref<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Ref</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">State</span><span style="color: #909183;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">A</span><span style="color: #909183;">]</span><span style="color: #7388d6;">]</span><span style="color: #707183;">)</span>
+  <span style="color: #707183;">(</span><span style="color: #795548;">implicit</span> <span style="color: #0288D1;">F</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">ConcurrentEffect</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">]</span>, <span style="color: #0288D1;">T</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Timer</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">]</span><span style="color: #707183;">)</span> <span style="color: #707183;">{</span>
+
+  <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">enqueue</span><span style="color: #7388d6;">(</span>a<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">A</span><span style="color: #7388d6;">)</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">F</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">Unit</span><span style="color: #7388d6;">]</span>
+  <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">timedDequeue</span><span style="color: #7388d6;">(</span>timeout<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">FiniteDuration</span><span style="color: #7388d6;">)</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">F</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">Option</span><span style="color: #909183;">[</span><span style="color: #0288D1;">A</span><span style="color: #909183;">]</span><span style="color: #7388d6;">]</span>
+
+<span style="color: #707183;">}</span>
+
+</pre>
+</div>
+
+</section>
+<section id="slide-orgd072782">
+<h4 id="orgd072782">enqueue</h4>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #795548;">// </span><span style="color: #795548;">final case class State[F[_], A](queue: Vector[A], deq:   Vector[Deferred[F, A]])</span>
+<span style="color: #795548;">// </span><span style="color: #795548;">ref: Ref[F, State[F, A]]</span>
+<span style="color: #bf360c;">def</span> <span style="color: #388E3C;">enqueue</span><span style="color: #707183;">(</span>a<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">A</span><span style="color: #707183;">)</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">F</span><span style="color: #707183;">[</span><span style="color: #0288D1;">Unit</span><span style="color: #707183;">]</span> <span style="color: #bf360c;">=</span> <span style="color: #707183;">{</span>
+    ref.modify <span style="color: #7388d6;">{</span> s <span style="color: #bf360c;">=&gt;</span>
+      <span style="color: #bf360c;">if</span> <span style="color: #909183;">(</span>s.deq.isEmpty<span style="color: #909183;">)</span> <span style="color: #909183;">{</span>
+        <span style="color: #709870;">(</span>s.copy<span style="color: #907373;">(</span>queue <span style="color: #bf360c;">=</span> s.queue :+ a<span style="color: #907373;">)</span>, <span style="color: #0288D1;">None</span><span style="color: #709870;">)</span>
+      <span style="color: #909183;">}</span> <span style="color: #bf360c;">else</span> <span style="color: #909183;">{</span>
+        <span style="color: #709870;">(</span>s.copy<span style="color: #907373;">(</span>deq <span style="color: #bf360c;">=</span> s.deq.tail<span style="color: #907373;">)</span>, <span style="color: #0288D1;">Some</span><span style="color: #907373;">(</span>s.deq.head<span style="color: #907373;">)</span><span style="color: #709870;">)</span>
+      <span style="color: #909183;">}</span>
+    <span style="color: #7388d6;">}</span>.flatMap <span style="color: #7388d6;">{</span>
+      <span style="color: #bf360c;">case</span> <span style="color: #3f51b5;">Some</span><span style="color: #909183;">(</span><span style="color: #455A64;">h</span><span style="color: #909183;">)</span> <span style="color: #bf360c;">=&gt;</span>
+        <span style="color: #0288D1;">F</span>.runAsync<span style="color: #909183;">(</span>h.complete<span style="color: #709870;">(</span>a<span style="color: #709870;">)</span><span style="color: #909183;">)(</span><span style="color: #bf360c;">_</span> <span style="color: #bf360c;">=&gt;</span> <span style="color: #0288D1;">IO</span>.unit<span style="color: #909183;">)</span>.to<span style="color: #909183;">[</span><span style="color: #0288D1;">F</span><span style="color: #909183;">]</span>
+      <span style="color: #bf360c;">case</span> <span style="color: #0288D1;">None</span> <span style="color: #bf360c;">=&gt;</span>
+        <span style="color: #0288D1;">F</span>.unit
+    <span style="color: #7388d6;">}</span>
+<span style="color: #707183;">}</span>
+</pre>
+</div>
+
+</section>
+<section id="slide-org0a44fe9">
+<h3 id="org0a44fe9">Http Client</h3>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #795548;">implicit</span> <span style="color: #bf360c;">class</span> <span style="color: #3f51b5;">AhcSyntax</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">[</span><span style="color: #bf360c;">_</span><span style="color: #7388d6;">]</span><span style="color: #707183;">](</span>req<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">BoundedRequestBuilder</span><span style="color: #707183;">)(</span><span style="color: #795548;">implicit</span> <span style="color: #0288D1;">F</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Concurrent</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">]</span><span style="color: #707183;">)</span> <span style="color: #707183;">{</span>
+  <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">run</span><span style="color: #7388d6;">()</span> <span style="color: #bf360c;">=</span> <span style="color: #0288D1;">F</span>.cancelable<span style="color: #7388d6;">[</span><span style="color: #0288D1;">Response</span><span style="color: #7388d6;">]</span> <span style="color: #7388d6;">{</span> k <span style="color: #bf360c;">=&gt;</span>
+    <span style="color: #bf360c;">val</span> <span style="color: #455A64;">future</span> <span style="color: #bf360c;">=</span> req.execute<span style="color: #909183;">(</span><span style="color: #bf360c;">new</span> <span style="color: #3f51b5;">AsyncCompletionHandler</span><span style="color: #709870;">[</span><span style="color: #0288D1;">Unit</span><span style="color: #709870;">]</span> <span style="color: #709870;">{</span>
+      <span style="color: #795548;">override</span> onThrowable<span style="color: #907373;">(</span><span style="color: #0288D1;">Throwable</span> t<span style="color: #907373;">)</span> <span style="color: #bf360c;">=</span> <span style="color: #907373;">{</span>
+        k<span style="color: #6276ba;">(</span><span style="color: #0288D1;">Left</span><span style="color: #858580;">(</span>t<span style="color: #858580;">)</span><span style="color: #6276ba;">)</span>
+      <span style="color: #907373;">}</span>
+      <span style="color: #795548;">override</span> onCompleted<span style="color: #907373;">(</span>res<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Response</span><span style="color: #907373;">)</span> <span style="color: #bf360c;">=</span> <span style="color: #907373;">{</span>
+        k<span style="color: #6276ba;">(</span><span style="color: #0288D1;">Right</span><span style="color: #858580;">(</span>res<span style="color: #858580;">)</span><span style="color: #6276ba;">)</span>
+      <span style="color: #907373;">}</span>
+    <span style="color: #709870;">}</span><span style="color: #909183;">)</span>
+    <span style="color: #0288D1;">F</span>.delay<span style="color: #909183;">(</span>future.cancel<span style="color: #709870;">()</span><span style="color: #909183;">)</span>
+  <span style="color: #7388d6;">}</span>
+<span style="color: #707183;">}</span>
+</pre>
+</div>
+
+</section>
+<section id="slide-orgba98d79">
+<h3 id="orgba98d79">Blocking Code</h3>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #bf360c;">def</span> <span style="color: #388E3C;">shift</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">[</span><span style="color: #bf360c;">_</span><span style="color: #7388d6;">]</span>, <span style="color: #0288D1;">A</span><span style="color: #707183;">](</span>f<span style="color: #bf360c;">:</span> <span style="color: #bf360c;">=&gt;</span> <span style="color: #0288D1;">A</span><span style="color: #707183;">)(</span>ec<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">ExecutionContext</span><span style="color: #707183;">)(</span><span style="color: #795548;">implicit</span> <span style="color: #0288D1;">S</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">ContextShift</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">]</span><span style="color: #707183;">)</span> <span style="color: #bf360c;">=</span> <span style="color: #707183;">{</span>
+  <span style="color: #0288D1;">S</span>.evalOn<span style="color: #7388d6;">(</span>ec<span style="color: #7388d6;">)(</span><span style="color: #0288D1;">F</span>.delay<span style="color: #909183;">(</span>f<span style="color: #909183;">)</span><span style="color: #7388d6;">)</span>
+<span style="color: #707183;">}</span>
+</pre>
+</div>
+
+</section>
+<section id="slide-org792268f">
+<h3 id="org792268f">代码组织</h3>
+<div class="outline-text-3" id="text-org792268f">
+</div>
+</section>
+<section id="slide-orgf4e0d40">
+<h4 id="orgf4e0d40">定义Alg(Tagless Final)</h4>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #bf360c;">trait</span> <span style="color: #3f51b5;">UserAlg</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">[</span><span style="color: #bf360c;">_</span><span style="color: #7388d6;">]</span><span style="color: #707183;">]</span> <span style="color: #707183;">{</span>
+  <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">add</span><span style="color: #7388d6;">(</span>a<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">User</span><span style="color: #7388d6;">)</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">F</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">Long</span><span style="color: #7388d6;">]</span>
+  <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">get</span><span style="color: #7388d6;">(</span>id<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Long</span><span style="color: #7388d6;">)</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">F</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">Option</span><span style="color: #909183;">[</span><span style="color: #0288D1;">User</span><span style="color: #909183;">]</span><span style="color: #7388d6;">]</span>
+<span style="color: #707183;">}</span>
+</pre>
+</div>
+
+</section>
+<section id="slide-orgce2c0d1">
+<h4 id="orgce2c0d1">ADT with Free</h4>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #795548;">sealed</span> <span style="color: #bf360c;">trait</span> <span style="color: #3f51b5;">UserOpA</span><span style="color: #707183;">[</span><span style="color: #0288D1;">A</span><span style="color: #707183;">]</span>
+<span style="color: #bf360c;">case</span> <span style="color: #bf360c;">class</span> <span style="color: #3f51b5;">Add</span><span style="color: #707183;">(</span>u<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">User</span><span style="color: #707183;">)</span> <span style="color: #bf360c;">extends</span> <span style="color: #3f51b5;">UserOpA</span><span style="color: #707183;">[</span><span style="color: #0288D1;">Long</span><span style="color: #707183;">]</span>
+<span style="color: #bf360c;">case</span> <span style="color: #bf360c;">class</span> <span style="color: #3f51b5;">Get</span><span style="color: #707183;">(</span>id<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Long</span><span style="color: #707183;">)</span> <span style="color: #bf360c;">extends</span> <span style="color: #3f51b5;">UserOpA</span><span style="color: #707183;">[</span><span style="color: #0288D1;">Option</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">User</span><span style="color: #7388d6;">]</span><span style="color: #707183;">]</span>
+<span style="color: #bf360c;">type</span> <span style="color: #0288D1;">UserOp</span><span style="color: #707183;">[</span><span style="color: #0288D1;">A</span><span style="color: #707183;">]</span> <span style="color: #bf360c;">=</span> <span style="color: #0288D1;">Free</span><span style="color: #707183;">[</span><span style="color: #0288D1;">UserOpA</span>, <span style="color: #0288D1;">A</span><span style="color: #707183;">]</span>
+
+<span style="color: #bf360c;">def</span> <span style="color: #388E3C;">add</span><span style="color: #707183;">(</span>u<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">User</span><span style="color: #707183;">)</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">UserOp</span><span style="color: #707183;">[</span><span style="color: #0288D1;">Long</span><span style="color: #707183;">]</span> <span style="color: #bf360c;">=</span> <span style="color: #0288D1;">Free</span>.liftF<span style="color: #707183;">[</span><span style="color: #0288D1;">UserOpA</span>, <span style="color: #0288D1;">Long</span><span style="color: #707183;">](</span><span style="color: #bf360c;">new</span> <span style="color: #3f51b5;">Add</span><span style="color: #7388d6;">(</span>u<span style="color: #7388d6;">)</span><span style="color: #707183;">)</span>
+<span style="color: #bf360c;">def</span> <span style="color: #388E3C;">get</span><span style="color: #707183;">(</span>id<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Long</span><span style="color: #707183;">)</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">UserOp</span><span style="color: #707183;">[</span><span style="color: #0288D1;">Option</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">User</span><span style="color: #7388d6;">]</span><span style="color: #707183;">]</span> <span style="color: #bf360c;">=</span> <span style="color: #0288D1;">Free</span>.liftF<span style="color: #707183;">[</span><span style="color: #0288D1;">UserOpA</span>, <span style="color: #0288D1;">Option</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">User</span><span style="color: #7388d6;">]</span><span style="color: #707183;">](</span><span style="color: #bf360c;">new</span> <span style="color: #3f51b5;">Get</span><span style="color: #7388d6;">(</span>id<span style="color: #7388d6;">)</span><span style="color: #707183;">)</span>
+
+<span style="color: #bf360c;">def</span> <span style="color: #388E3C;">init</span><span style="color: #707183;">(</span>u<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">User</span><span style="color: #707183;">)</span> <span style="color: #bf360c;">=</span> <span style="color: #707183;">{</span>
+  get<span style="color: #7388d6;">(</span>u.id<span style="color: #7388d6;">)</span>.flatMap <span style="color: #7388d6;">{</span>
+    <span style="color: #bf360c;">case</span> <span style="color: #3f51b5;">Some</span><span style="color: #909183;">(</span><span style="color: #455A64;">u</span><span style="color: #909183;">)</span> <span style="color: #bf360c;">=&gt;</span> <span style="color: #0288D1;">Free</span>.pure<span style="color: #909183;">(</span>u<span style="color: #909183;">)</span>
+    <span style="color: #bf360c;">case</span> <span style="color: #0288D1;">None</span> <span style="color: #bf360c;">=&gt;</span> add<span style="color: #909183;">(</span>u<span style="color: #909183;">)</span>.map<span style="color: #909183;">(</span>id <span style="color: #bf360c;">=&gt;</span> u.copy<span style="color: #709870;">(</span>id <span style="color: #bf360c;">=</span> id<span style="color: #709870;">)</span><span style="color: #909183;">)</span>
+  <span style="color: #7388d6;">}</span>
+<span style="color: #707183;">}</span>
+</pre>
+</div>
+
+</section>
+<section id="slide-orge00f926">
+<h4 id="orge00f926">Algbera with F</h4>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #bf360c;">class</span> <span style="color: #3f51b5;">AlgWithFApp</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">[</span><span style="color: #bf360c;">_</span><span style="color: #7388d6;">]</span><span style="color: #707183;">](</span>alg<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">UserAlg</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">]</span><span style="color: #707183;">)(</span><span style="color: #795548;">implicit</span> <span style="color: #0288D1;">F</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Monad</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">]</span><span style="color: #707183;">)</span> <span style="color: #707183;">{</span>
+  <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">init</span><span style="color: #7388d6;">(</span>user<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">User</span><span style="color: #7388d6;">)</span> <span style="color: #bf360c;">=</span> alg.get<span style="color: #7388d6;">(</span>user.id<span style="color: #7388d6;">)</span>.flatMap <span style="color: #7388d6;">{</span>
+    <span style="color: #bf360c;">case</span> <span style="color: #0288D1;">None</span> <span style="color: #bf360c;">=&gt;</span> alg.add<span style="color: #909183;">(</span>user<span style="color: #909183;">)</span>.map<span style="color: #909183;">(</span>id <span style="color: #bf360c;">=&gt;</span> user.copy<span style="color: #709870;">(</span>id <span style="color: #bf360c;">=</span> id<span style="color: #709870;">)</span><span style="color: #909183;">)</span>
+    <span style="color: #bf360c;">case</span> <span style="color: #3f51b5;">Some</span><span style="color: #909183;">(</span><span style="color: #455A64;">h</span><span style="color: #909183;">)</span> <span style="color: #bf360c;">=&gt;</span> <span style="color: #0288D1;">F</span>.pure<span style="color: #909183;">(</span>h<span style="color: #909183;">)</span>
+  <span style="color: #7388d6;">}</span>
+<span style="color: #707183;">}</span>
+</pre>
+</div>
+
+</section>
+<section id="slide-org7ccccfe">
+<h4 id="org7ccccfe">用类型处理错误</h4>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #795548;">sealed</span> <span style="color: #bf360c;">trait</span> <span style="color: #3f51b5;">UserLoginErr</span> <span style="color: #bf360c;">extends</span> <span style="color: #3f51b5;">Exception</span>
+<span style="color: #bf360c;">object</span> <span style="color: #0288D1;">UserLoginErr</span> <span style="color: #707183;">{</span>
+  <span style="color: #bf360c;">case</span> <span style="color: #bf360c;">class</span> <span style="color: #3f51b5;">NotExists</span><span style="color: #7388d6;">(</span>email<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">String</span><span style="color: #7388d6;">)</span> <span style="color: #bf360c;">extends</span> <span style="color: #3f51b5;">UserLoginErr</span>
+  <span style="color: #bf360c;">case</span> <span style="color: #bf360c;">object</span> <span style="color: #0288D1;">PasswordIncorrect</span> <span style="color: #bf360c;">extends</span> <span style="color: #3f51b5;">UserLoginErr</span>
+<span style="color: #707183;">}</span>
+<span style="color: #bf360c;">trait</span> <span style="color: #3f51b5;">UserAlg</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">[</span><span style="color: #bf360c;">_</span><span style="color: #7388d6;">]</span><span style="color: #707183;">]</span> <span style="color: #707183;">{</span>
+  <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">login</span><span style="color: #7388d6;">(</span>email<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">String</span>, pass<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">String</span><span style="color: #7388d6;">)</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">F</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">Either</span><span style="color: #909183;">[</span><span style="color: #0288D1;">UserLoginErr</span>, <span style="color: #0288D1;">Unit</span><span style="color: #909183;">]</span><span style="color: #7388d6;">]</span>
+<span style="color: #707183;">}</span>
+</pre>
+</div>
+
+</section>
+</section>
+<section>
+<section id="slide-orga6d3d02">
+<h2 id="orga6d3d02">Fs2</h2>
+<p>
+Streaming your data with <b>Stream</b><br />
+</p>
+
+</section>
+<section id="slide-orgd9ac8f3">
+<h3 id="orgd9ac8f3">Stream是什么</h3>
+<ul>
+<li>标准库的 <b>Stream</b> - 可能是无限长的队列<br /></li>
+<li>fs2.Stream - 和标准库类似，但是这些元素可以通过 <b>eval</b> 副作用 <b>F</b> 获得<br /></li>
+
+</ul>
+<aside class="notes">
+<p>
+实践过程中经常需要处理副作用<br />
+</p>
+
+</aside>
+</section>
+<section id="slide-org4942bd3">
+<h3 id="org4942bd3">什么是简单</h3>
+<ul>
+<li>优雅(概念少)<br /></li>
+<li>复杂(概念多)<br /></li>
+
+</ul>
+</section>
+<section id="slide-org29ed8bd">
+<h3 id="org29ed8bd">Elegant</h3>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #bf360c;">type</span> <span style="color: #0288D1;">Pipe</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">[</span><span style="color: #bf360c;">_</span><span style="color: #7388d6;">]</span>, <span style="color: #0288D1;">I</span>, <span style="color: #0288D1;">O</span><span style="color: #707183;">]</span> <span style="color: #bf360c;">=</span> <span style="color: #0288D1;">Stream</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">I</span><span style="color: #707183;">]</span> <span style="color: #bf360c;">=&gt;</span> <span style="color: #0288D1;">Stream</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">O</span><span style="color: #707183;">]</span>
+<span style="color: #bf360c;">type</span> <span style="color: #0288D1;">Sink</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">[</span><span style="color: #bf360c;">_</span><span style="color: #7388d6;">]</span>, <span style="color: #0288D1;">I</span><span style="color: #707183;">]</span> <span style="color: #bf360c;">=</span> <span style="color: #0288D1;">Pipe</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">I</span>, <span style="color: #0288D1;">Unit</span><span style="color: #707183;">]</span>
+<span style="color: #bf360c;">trait</span> <span style="color: #3f51b5;">Topic</span> <span style="color: #707183;">{</span>
+  <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">publish</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Sink</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">A</span><span style="color: #7388d6;">]</span>
+  <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">subscribe</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Stream</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">A</span><span style="color: #7388d6;">]</span>
+<span style="color: #707183;">}</span>
+<span style="color: #bf360c;">trait</span> <span style="color: #3f51b5;">Queue</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">[</span><span style="color: #bf360c;">_</span><span style="color: #7388d6;">]</span>, <span style="color: #0288D1;">A</span><span style="color: #707183;">]</span> <span style="color: #707183;">{</span>
+  <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">enqueue</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Sink</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">A</span><span style="color: #7388d6;">]</span>
+  <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">dequeue</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Stream</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">A</span><span style="color: #7388d6;">]</span>
+<span style="color: #707183;">}</span>
+</pre>
+</div>
+
+</section>
+<section id="slide-orgd58dfa1">
+<h3 id="orgd58dfa1">Powerful</h3>
+<ul>
+<li>Combinators（scan/fold/split&#x2026;）<br /></li>
+<li>Stateful transofrm with Pull<br /></li>
+
+</ul>
+
+</section>
+<section id="slide-org3987a1b">
+<h3 id="org3987a1b">Streaming query</h3>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #bf360c;">case</span> <span style="color: #bf360c;">class</span> <span style="color: #3f51b5;">User</span><span style="color: #707183;">(</span>id<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Long</span><span style="color: #707183;">)</span>
+
+<span style="color: #bf360c;">def</span> <span style="color: #388E3C;">readFrom</span><span style="color: #707183;">(</span>minId<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Long</span><span style="color: #707183;">)</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">F</span><span style="color: #707183;">[</span><span style="color: #0288D1;">Seq</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">User</span><span style="color: #7388d6;">]</span><span style="color: #707183;">]</span> <span style="color: #bf360c;">=</span> ???
+<span style="color: #bf360c;">def</span> <span style="color: #388E3C;">sendMsg</span><span style="color: #707183;">(</span>u<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">User</span><span style="color: #707183;">)</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">F</span><span style="color: #707183;">[</span><span style="color: #0288D1;">Unit</span><span style="color: #707183;">]</span> <span style="color: #bf360c;">=</span> ???
+
+<span style="color: #bf360c;">def</span> <span style="color: #388E3C;">stream</span><span style="color: #707183;">()</span> <span style="color: #bf360c;">=</span> <span style="color: #707183;">{</span>
+  <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">loop</span><span style="color: #7388d6;">(</span>from<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Long</span><span style="color: #7388d6;">)</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Stream</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">User</span><span style="color: #7388d6;">]</span> <span style="color: #bf360c;">=</span>
+    <span style="color: #0288D1;">Stream</span>.eval<span style="color: #7388d6;">(</span>readFrom<span style="color: #909183;">(</span>from<span style="color: #909183;">)</span><span style="color: #7388d6;">)</span>.flatMap <span style="color: #7388d6;">{</span>
+      <span style="color: #bf360c;">case</span> <span style="color: #455A64;">us</span> <span style="color: #bf360c;">if</span> !us.isEmpty <span style="color: #bf360c;">=&gt;</span> <span style="color: #0288D1;">Stream</span>.emits<span style="color: #909183;">(</span>us<span style="color: #909183;">)</span> ++ loop<span style="color: #909183;">(</span>us.map<span style="color: #709870;">(</span><span style="color: #bf360c;">_</span>.id<span style="color: #709870;">)</span>.max<span style="color: #909183;">)</span>
+      <span style="color: #bf360c;">case</span> <span style="color: #455A64;">us</span> <span style="color: #bf360c;">=&gt;</span> <span style="color: #0288D1;">Stream</span>.empty
+    <span style="color: #7388d6;">}</span>
+  <span style="color: #707183;">}</span>
+  loop<span style="color: #707183;">(</span><span style="color: #0288D1;">0L</span><span style="color: #707183;">)</span>
+<span style="color: #88090B;">}</span>
+stream<span style="color: #88090B;">()</span>.evalMap<span style="color: #88090B;">(</span>sendMsg<span style="color: #88090B;">)</span>
+</pre>
+</div>
+
+</section>
+<section id="slide-org78641d3">
+<h3 id="org78641d3">Prallel process</h3>
+<div class="org-src-container">
+
+<pre  class="src src-scala">stream<span style="color: #707183;">()</span>.mapAsync<span style="color: #707183;">(</span><span style="color: #0288D1;">100</span><span style="color: #707183;">)(</span>sendMsg<span style="color: #707183;">)</span>
+</pre>
+</div>
+
+</section>
+<section id="slide-org7019cb6">
+<h3 id="org7019cb6">Streaming mysql binlog</h3>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #bf360c;">def</span> <span style="color: #388E3C;">stream</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">[</span><span style="color: #bf360c;">_</span><span style="color: #7388d6;">]</span><span style="color: #707183;">](</span>cli<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">BinaryLogClient</span><span style="color: #707183;">)(</span><span style="color: #795548;">implicit</span> <span style="color: #0288D1;">F</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">ConcurrentEffect</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">]</span><span style="color: #707183;">)</span> <span style="color: #bf360c;">=</span> <span style="color: #707183;">{</span>
+
+    <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">register</span><span style="color: #7388d6;">(</span>queue<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Queue</span><span style="color: #909183;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">Event</span><span style="color: #909183;">]</span><span style="color: #7388d6;">)</span> <span style="color: #bf360c;">=</span> <span style="color: #0288D1;">F</span>.delay <span style="color: #7388d6;">{</span>
+      cli.registerEventListener<span style="color: #909183;">(</span><span style="color: #bf360c;">new</span> <span style="color: #3f51b5;">BinaryLogClient</span>.<span style="color: #0288D1;">EventListener</span><span style="color: #709870;">()</span> <span style="color: #709870;">{</span>
+        <span style="color: #795548;">override</span> <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">onEvent</span><span style="color: #907373;">(</span>event<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Event</span><span style="color: #907373;">)</span> <span style="color: #907373;">{</span>
+          <span style="color: #0288D1;">F</span>.toIO<span style="color: #6276ba;">(</span>queue.enqueue1<span style="color: #858580;">(</span>event<span style="color: #858580;">)</span><span style="color: #6276ba;">)</span>.unsafeRunSync<span style="color: #6276ba;">()</span> <span style="color: #795548;">//</span><span style="color: #795548;">Blocking</span>
+        <span style="color: #907373;">}</span>
+      <span style="color: #709870;">}</span><span style="color: #909183;">)</span>
+      cli.connect<span style="color: #909183;">(</span><span style="color: #0288D1;">3000</span><span style="color: #909183;">)</span> <span style="color: #795548;">//</span><span style="color: #795548;">Spawns in new Thread</span>
+    <span style="color: #7388d6;">}</span>
+
+    <span style="color: #0288D1;">Stream</span>.bracket <span style="color: #7388d6;">{</span>
+      <span style="color: #0288D1;">Queue</span>.bounded<span style="color: #909183;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">Event</span><span style="color: #909183;">](</span><span style="color: #0288D1;">1000</span><span style="color: #909183;">)</span>.flatTap<span style="color: #909183;">(</span>register<span style="color: #909183;">)</span>
+    <span style="color: #7388d6;">}</span> <span style="color: #7388d6;">{</span>
+      <span style="color: #bf360c;">_</span> <span style="color: #bf360c;">=&gt;</span> <span style="color: #0288D1;">F</span>.delay<span style="color: #909183;">(</span>cli.disconnect<span style="color: #709870;">()</span><span style="color: #909183;">)</span>
+    <span style="color: #7388d6;">}</span>.flatMap<span style="color: #7388d6;">(</span>q <span style="color: #bf360c;">=&gt;</span> q.dequeueAvailable<span style="color: #7388d6;">)</span>
+
+<span style="color: #707183;">}</span>
+</pre>
+</div>
+</section>
+<section id="slide-org5532947">
+<h3 id="org5532947">Backpuress with Queue</h3>
+<ul>
+<li>bounded<br /></li>
+<li>unbounded<br /></li>
+<li>circularBuffer<br /></li>
+
+</ul>
+
+</section>
+<section id="slide-org42cde62">
+<h3 id="org42cde62">Merge</h3>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #bf360c;">def</span> <span style="color: #388E3C;">merge</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">[</span><span style="color: #bf360c;">_</span><span style="color: #7388d6;">]</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">ConcurrentEffect</span>, <span style="color: #0288D1;">A</span><span style="color: #707183;">]</span> <span style="color: #707183;">{</span>
+    <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">fromQuery</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Stream</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">A</span><span style="color: #7388d6;">]</span> <span style="color: #bf360c;">=</span> ???
+    <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">fromRealtime</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Stream</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">A</span><span style="color: #7388d6;">]</span> <span style="color: #bf360c;">=</span> ???
+    <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">stream</span> <span style="color: #bf360c;">=</span> fromQuery.merge<span style="color: #7388d6;">(</span>fromRealtime<span style="color: #7388d6;">)</span>
+<span style="color: #707183;">}</span>
+</pre>
+</div>
+
+</section>
+<section id="slide-org926f4a9">
+<h3 id="org926f4a9">ParJoin</h3>
+<div class="org-src-container">
+
+<pre  class="src src-scala"><span style="color: #bf360c;">def</span> <span style="color: #388E3C;">parJoin</span><span style="color: #707183;">[</span><span style="color: #0288D1;">F</span><span style="color: #7388d6;">[</span><span style="color: #bf360c;">_</span><span style="color: #7388d6;">]</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">ConcurrentEffect</span>, <span style="color: #0288D1;">A</span><span style="color: #707183;">]</span> <span style="color: #bf360c;">=</span> <span style="color: #707183;">{</span>
+    <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">conns</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Stream</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">Con</span><span style="color: #7388d6;">]</span>
+    <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">request</span><span style="color: #7388d6;">(</span>c<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Con</span><span style="color: #7388d6;">)</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Stream</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">F</span>, <span style="color: #0288D1;">Msg</span><span style="color: #7388d6;">]</span>
+    <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">reply</span><span style="color: #7388d6;">(</span>m<span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">Msg</span><span style="color: #7388d6;">)</span><span style="color: #bf360c;">:</span> <span style="color: #3f51b5;">F</span><span style="color: #7388d6;">[</span><span style="color: #0288D1;">Unit</span><span style="color: #7388d6;">]</span>
+    <span style="color: #bf360c;">def</span> <span style="color: #388E3C;">run</span><span style="color: #7388d6;">()</span> <span style="color: #bf360c;">=</span> conns.map<span style="color: #7388d6;">(</span>request<span style="color: #7388d6;">)</span>.parJoin<span style="color: #7388d6;">(</span><span style="color: #0288D1;">1000</span><span style="color: #7388d6;">)</span>.evalMap<span style="color: #7388d6;">(</span>reply<span style="color: #7388d6;">)</span>
+<span style="color: #707183;">}</span>
+</pre>
+</div>
+</section>
+<section id="slide-orgd963207">
+<h3 id="orgd963207">Transform with Pull</h3>
+</section>
+<section id="slide-orgc080d29">
+<h3 id="orgc080d29">More</h3>
+<ul>
+<li>Signal<br /></li>
+<li>Topic<br /></li>
+
+</ul>
+</section>
+</section>
+<section>
+<section id="slide-org9fee0f9">
+<h2 id="org9fee0f9">Thanks</h2>
+</section>
+</section>
+</div>
+</div>
+<script src="./reveal.js/lib/js/head.min.js"></script>
+<script src="./reveal.js/js/reveal.js"></script>
+
+<script>
+// Full list of configuration options available here:
+// https://github.com/hakimel/reveal.js#configuration
+Reveal.initialize({
+
+controls: true,
+progress: true,
+history: false,
+center: true,
+slideNumber: 'c',
+rollingLinks: false,
+keyboard: true,
+overview: true,
+
+theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+transition: Reveal.getQueryHash().transition || 'Slide', // default/cube/page/concave/zoom/linear/fade/none
+transitionSpeed: 'default',
+multiplex: {
+    secret: '', // null if client
+    id: '', // id, obtained from socket.io server
+    url: '' // Location of socket.io server
+},
+
+// Optional libraries used to extend on reveal.js
+dependencies: [
+ { src: './reveal.js/lib/js/classList.js', condition: function() { return !document.body.classList; } },
+ { src: './reveal.js/plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+ { src: './reveal.js/plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+ { src: './reveal.js/plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+ { src: './reveal.js/plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }]
+});
+</script>
+</body>
+</html>

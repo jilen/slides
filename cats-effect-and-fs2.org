@@ -242,7 +242,7 @@ def shift[F[_], A](f: => A)(ec: ExecutionContext)(implicit S: ContextShift[F]) =
    #+END_SRC
 
 ** 代码组织
-*** 定义Alg
+*** 定义Alg(Tagless Final)
     #+BEGIN_SRC scala
 trait UserAlg[F[_]] {
   def add(a: User): F[Long]
@@ -279,7 +279,6 @@ class AlgWithFApp[F[_]](alg: UserAlg[F])(implicit F: Monad[F]) {
     #+END_SRC
 
 *** 用类型处理错误
-
     #+BEGIN_SRC scala
 sealed trait UserLoginErr extends Exception
 object UserLoginErr {

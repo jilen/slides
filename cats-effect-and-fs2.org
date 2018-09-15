@@ -5,7 +5,7 @@
 #+Author: Jilen
 #+Email: jilen.zhang@gmail.com
 
-* Real world
+* Real world FP
   with
   Cats-Effect and Fs2
 ** Jilen
@@ -29,7 +29,7 @@
 ** 分享内容
    + Cats-Effect介绍
    + Cats-Effect工程实践
-   + F2实践
+   + Fs2实践
 * Why?
 ** 提升知识水平...
 *** [[./img/alex.png]]
@@ -68,8 +68,6 @@ hide members
    #+END_SRC
 
 ** Why not Future
-   #+CAPTION: IO vs Future
-   #+NAME:   tab:features
    - 不安全
    - 性能差
    - 难以推理
@@ -386,7 +384,7 @@ def parJoin[F[_]: ConcurrentEffect, A] = {
     def conns: Stream[F, Con]
     def request(c: Con): Stream[F, Msg]
     def reply(m: Msg): F[Unit]
-    def run() = conns.flatMap(request).parJoin(1000).evalMap(reply)
+    def run() = conns.map(request).parJoin(1000).evalMap(reply)
 }
    #+END_SRC
 ** Transform with Pull
